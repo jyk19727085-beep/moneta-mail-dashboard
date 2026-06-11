@@ -29,7 +29,10 @@ def init_firebase():
             # Streamlit secrets의 줄바꿈 문자 처리 (오류 방지 핵심)
             cred_dict["private_key"] = cred_dict["private_key"].replace('\\n', '\n')
             cred = credentials.Certificate(cred_dict)
-            firebase_admin.initializeApp(cred)
+            
+            # 모네타가 수정한 핵심 포인트: initializeApp -> initialize_app
+            firebase_admin.initialize_app(cred)
+            
         return firestore.client()
     except Exception as e:
         st.error(f"데이터베이스 연결 오류: {e}")
