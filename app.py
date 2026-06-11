@@ -29,15 +29,15 @@ def init_firebase():
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
         return firestore.client()
-    except Exception as e:
-        st.error(f"데이터베이스 연결 오류: {e}")
+    except:
+        st.error("데이터베이스 연결 오류가 발생했습니다.")
         return None
 
 db = init_firebase()
 
 try:
     genai.configure(api_key=st.secrets["api_keys"]["gemini"])
-except Exception as e:
+except:
     st.error("AI 엔진 초기화 실패. 키 설정을 확인해 주십시오.")
 
 # ==========================================
@@ -54,8 +54,8 @@ def send_telegram(subject, summary, sentiment):
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         
         requests.post(url, data={'chat_id': chat_id, 'text': text}, timeout=5)
-    except Exception as e:
-        print(f"텔레그램 발송 오류: {e}")
+    except:
+        pass # 에러 발생 시 조용히 넘어감
 
 def get_gmail_service():
     """지메일 보안 통행증 확인"""
@@ -64,7 +64,7 @@ def get_gmail_service():
         creds_data["token_uri"] = "https://oauth2.googleapis.com/token"
         creds = Credentials.from_authorized_user_info(creds_data)
         return build('gmail', 'v1', credentials=creds)
-    except Exception as e:
+    except:
         return None
 
 def analyze_email_content(text_content):
@@ -92,7 +92,7 @@ def analyze_email_content(text_content):
         
         return json.loads(raw_text)
         
-    except Exception as e:
+    except:
         return {
             "summary": "내용이 너무 짧거나 시스템 알림 메일입니다.",
             "keyword": "기타",
@@ -127,7 +127,7 @@ def scan_and_process():
     try:
         results = service.users().messages().list(userId='me', q=query, maxResults=3).execute()
         messages = results.get('messages', [])
-    except Exception as e:
+    except:
         return 0
 
     processed_count = 0
@@ -163,8 +163,8 @@ def scan_and_process():
                 send_telegram(subject, analysis.get('summary'), analysis.get('sentiment'))
                 
                 processed_count += 1
-            except Exception as e:
-                continue
+            except:
+                continue # 메일 처리 중 에러 발생 시 조용히 다음 메일로 넘어감
 
     return processed_count
 
