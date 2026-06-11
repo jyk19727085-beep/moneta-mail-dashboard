@@ -51,7 +51,7 @@ def send_telegram(subject, summary, sentiment):
         if not bot_token or not chat_id: return
         
         text = f"🔔 [새로운 투자 분석 보고서 도착]\n\n📌 제목: {subject}\n🌡️ 시장 반응: {sentiment}\n📝 요약: {summary}\n\n👉 주인님, 대시보드에 접속하여 심층 분석을 확인해 주십시오."
-        url = f"[https://api.telegram.org/bot](https://api.telegram.org/bot){bot_token}/sendMessage"
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         
         requests.post(url, data={'chat_id': chat_id, 'text': text}, timeout=5)
     except Exception as e:
@@ -61,7 +61,7 @@ def get_gmail_service():
     """지메일 보안 통행증 확인"""
     try:
         creds_data = dict(st.secrets["gmail_oauth"])
-        creds_data["token_uri"] = "[https://oauth2.googleapis.com/token](https://oauth2.googleapis.com/token)"
+        creds_data["token_uri"] = "https://oauth2.googleapis.com/token"
         creds = Credentials.from_authorized_user_info(creds_data)
         return build('gmail', 'v1', credentials=creds)
     except Exception as e:
@@ -72,7 +72,6 @@ def analyze_email_content(text_content):
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        # 복사 오류를 막기 위해 프롬프트를 괄호와 더하기로 안전하게 연결했습니다.
         prompt = (
             "당신은 냉철한 AI 금융 비서입니다. 아래 [이메일 내용]을 분석하여 정확히 JSON 형식으로만 대답하십시오.\n"
             "어떤 경우에도 부연 설명이나 마크다운 기호를 넣지 마십시오. 오직 순수 JSON 데이터만 출력해야 합니다.\n\n"
@@ -88,7 +87,6 @@ def analyze_email_content(text_content):
         
         response = model.generate_content(prompt)
         
-        # 🚨 [가장 완벽한 찌꺼기 제거법] 자르지 않고 그냥 공백으로 바꿔버립니다! (에러 절대 발생 안함)
         raw_text = response.text.strip()
         raw_text = raw_text.replace("```json", "").replace("```", "").strip()
         
@@ -110,7 +108,7 @@ def fetch_news(keyword):
     try:
         api_key = st.secrets["api_keys"]["google_search"]
         cx = st.secrets["api_keys"]["search_engine_id"]
-        url = f"[https://www.googleapis.com/customsearch/v1?key=](https://www.googleapis.com/customsearch/v1?key=){api_key}&cx={cx}&q={keyword} 주식 OR 전망&num=3"
+        url = f"https://www.googleapis.com/customsearch/v1?key={api_key}&cx={cx}&q={keyword} 주식 OR 전망&num=3"
         res = requests.get(url, timeout=5).json()
         if 'items' in res:
             return [item['title'] for item in res['items']]
