@@ -9,11 +9,11 @@ import json
 from streamlit_autorefresh import st_autorefresh
 
 # ==========================================
-# 1. UI 설정 및 자동 새로고침 (클라우드 감시)
+# 1. UI 설정 및 자동 새로고침
 # ==========================================
 st.set_page_config(page_title="Minerva AI Dashboard", page_icon="📈", layout="centered")
 
-# 60초(60000ms)마다 백그라운드 엔진 가동
+# 60초마다 백그라운드 엔진 가동
 st_autorefresh(interval=60000, limit=None, key="auto_scanner")
 
 # ==========================================
@@ -29,7 +29,7 @@ def init_firebase():
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
         return firestore.client()
-    except:
+    except BaseException:
         st.error("데이터베이스 연결 오류가 발생했습니다.")
         return None
 
@@ -37,11 +37,11 @@ db = init_firebase()
 
 try:
     genai.configure(api_key=st.secrets["api_keys"]["gemini"])
-except:
+except BaseException:
     st.error("AI 엔진 초기화 실패. 키 설정을 확인해 주십시오.")
 
 # ==========================================
-# 3. 비서 미네르바의 분석 및 알림 모듈
+# 3. 분석 및 알림 모듈
 # ==========================================
 def send_telegram(subject, summary, sentiment):
     """텔레그램 챗봇 알림 발송"""
@@ -54,8 +54,8 @@ def send_telegram(subject, summary, sentiment):
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         
         requests.post(url, data={'chat_id': chat_id, 'text': text}, timeout=5)
-    except:
-        pass # 에러 발생 시 조용히 넘어감
+    except BaseException:
+        pass
 
 def get_gmail_service():
     """지메일 보안 통행증 확인"""
@@ -64,11 +64,11 @@ def get_gmail_service():
         creds_data["token_uri"] = "https://oauth2.googleapis.com/token"
         creds = Credentials.from_authorized_user_info(creds_data)
         return build('gmail', 'v1', credentials=creds)
-    except:
+    except BaseException:
         return None
 
 def analyze_email_content(text_content):
-    """안전한 AI 분석 로직 (에러 원천 차단)"""
+    """안전한 AI 분석 로직"""
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
         
@@ -92,7 +92,7 @@ def analyze_email_content(text_content):
         
         return json.loads(raw_text)
         
-    except:
+    except BaseException:
         return {
             "summary": "내용이 너무 짧거나 시스템 알림 메일입니다.",
             "keyword": "기타",
@@ -101,7 +101,7 @@ def analyze_email_content(text_content):
         }
 
 def fetch_news(keyword):
-    """구글 맞춤검색을 통한 최신 헤드라인 스캐닝"""
+    """구글 맞춤검색 최신 헤드라인"""
     if keyword in ['기타', '테스트', '분석 불가']:
         return ["관련 뉴스를 검색할 수 없는 내용입니다."]
         
@@ -113,11 +113,11 @@ def fetch_news(keyword):
         if 'items' in res:
             return [item['title'] for item in res['items']]
         return ["관련 최신 뉴스를 찾을 수 없습니다."]
-    except:
+    except BaseException:
         return ["뉴스 서버 응답 지연."]
 
 # ==========================================
-# 4. 실시간 감시 엔진 (Core Loop)
+# 4. 실시간 감시 엔진
 # ==========================================
 def scan_and_process():
     service = get_gmail_service()
@@ -127,7 +127,7 @@ def scan_and_process():
     try:
         results = service.users().messages().list(userId='me', q=query, maxResults=3).execute()
         messages = results.get('messages', [])
-    except:
+    except BaseException:
         return 0
 
     processed_count = 0
@@ -163,8 +163,8 @@ def scan_and_process():
                 send_telegram(subject, analysis.get('summary'), analysis.get('sentiment'))
                 
                 processed_count += 1
-            except:
-                continue # 메일 처리 중 에러 발생 시 조용히 다음 메일로 넘어감
+            except BaseException:
+                continue
 
     return processed_count
 
