@@ -16,11 +16,11 @@ st.set_page_config(page_title="Minerva Quant Terminal", page_icon="📈", layout
 st_autorefresh(interval=60000, limit=None, key="auto_scanner")
 
 # ==========================================
-# 2. 🚨 [긴급 조치] 텔레그램 하드코딩 (에러 원천 차단)
+# 2. 토큰 정화 모듈 (공백 에러 방지)
 # ==========================================
-# Secrets 설정 오류를 무시하고 무조건 발송되도록 직접 입력합니다.
-HARDCODED_BOT_TOKEN = "8824362537:AAFV0cVo6FOdrvZ2rhmZ1E9-iamPYCOuTmO"
-HARDCODED_CHAT_ID = "8841018398"
+def clean_token(token_str):
+    if not token_str: return ""
+    return re.sub(r'\s+', '', str(token_str))
 
 # ==========================================
 # 3. API 및 DB 초기화
@@ -45,13 +45,18 @@ except BaseException:
     pass
 
 # ==========================================
-# 4. 텔레그램 발송 모듈
+# 4. 텔레그램 발송 모듈 (안전한 Secrets 호출)
 # ==========================================
 def send_telegram(subject, summary, sentiment):
     try:
+        bot_token = clean_token(st.secrets["api_keys"]["telegram_bot_token"])
+        chat_id = clean_token(st.secrets["api_keys"]["telegram_chat_id"])
+        
+        if not bot_token or not chat_id: return
+        
         text = f"🚨 [Minerva 퀀트 시그널 포착]\n\n📌 이슈: {subject}\n🌡️ 투심: {sentiment}\n\n💡 퀀트 인사이트:\n{summary}\n\n👉 대시보드에서 상세 분석 및 뉴스 링크를 확인하십시오."
-        url = f"https://api.telegram.org/bot{HARDCODED_BOT_TOKEN}/sendMessage"
-        requests.post(url, data={'chat_id': HARDCODED_CHAT_ID, 'text': text}, timeout=5)
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        requests.post(url, data={'chat_id': chat_id, 'text': text}, timeout=5)
     except BaseException:
         pass
 
@@ -80,9 +85,9 @@ def analyze_email_content(text_content):
         
         [필수 포함 내용 - 마크다운 기호 없이 JSON으로만 응답]
         {{
-            "summary": "단순 요약이 아닌, 이 이슈가 글로벌 유동성(M2), 금리, 환율에 미칠 매크로적 파급력과 코스피/나스닥 상관계수 변화 예측 (최소 4~5줄의 깊이 있는 통찰)",
-            "keyword": "구글 뉴스 검색을 위한 가장 구체적이고 뾰족한 경제 키워드 1개 (예: 엔비디아 실적, CPI 지수, FOMC 점도표)",
-            "analyst_view": "현재 월가 기관 투자자들의 자금 흐름(스마트머니 이동) 및 이에 따른 파생상품/옵션 시장의 헷징 동향, 그리고 즉각적인 퀀트 매매 포지션(롱/숏/비중 조절) 제안 (아주 구체적으로)",
+            "summary": "이 이슈가 글로벌 유동성, 금리, 환율에 미칠 매크로적 파급력과 코스피/나스닥 상관계수 변화 예측 (최소 4~5줄의 깊이 있는 통찰)",
+            "keyword": "구글 뉴스 검색을 위한 가장 구체적이고 뾰족한 경제 키워드 1개 (예: 엔비디아 실적, CPI 지수)",
+            "analyst_view": "현재 월가 기관 투자자들의 자금 흐름(스마트머니 이동) 동향, 그리고 즉각적인 퀀트 매매 포지션 제안",
             "sentiment": "강세, 약세, 관망, 중립 중 택 1"
         }}
         """
@@ -101,7 +106,6 @@ def analyze_email_content(text_content):
 # 6. 뉴스 검색 (URL 링크 포함)
 # ==========================================
 def fetch_news_with_links(keyword):
-    """뉴스 제목뿐만 아니라 클릭 가능한 실제 링크(URL)를 가져옵니다."""
     try:
         api_key = st.secrets["api_keys"]["google_search"]
         cx = st.secrets["api_keys"]["search_engine_id"]
@@ -111,7 +115,6 @@ def fetch_news_with_links(keyword):
         news_data = []
         if 'items' in res:
             for item in res['items']:
-                # 마크다운 링크 형식으로 저장: [기사 제목](기사 URL)
                 news_data.append(f"[{item['title']}]({item['link']})")
             return news_data
         return ["관련 최신 헤드라인을 수집 중입니다."]
@@ -143,7 +146,6 @@ def scan_and_process():
                 subject = next((h['value'] for h in headers if h['name'] == 'Subject'), '새로운 시그널')
                 snippet = msg_data.get('snippet', '데이터 없음')
 
-                # AI 심층 분석 및 링크 포함 뉴스 검색
                 analysis = analyze_email_content(snippet if snippet.strip() else subject)
                 news_links = fetch_news_with_links(analysis.get('keyword', '경제'))
 
@@ -216,7 +218,6 @@ def main():
                     st.metric(label="Market Sentiment", value=sentiment)
                     
                     st.markdown("**🔗 실시간 원문 기사 (클릭하여 이동)**")
-                    # 마크다운 링크를 클릭 가능하도록 변환하여 출력
                     for n in data.get('news', []):
                         st.markdown(f"▪️ {n}")
                     
@@ -227,19 +228,20 @@ def main():
                 
                 st.markdown("</div>", unsafe_allow_html=True)
 
-    # 텔레그램 하드코딩 직접 테스트 버튼
+    # 텔레그램 연동 정상화 확인 버튼
     st.write("---")
-    if st.button("🚀 [최종] 텔레그램 하드코딩 직접 발사 테스트", use_container_width=True):
+    if st.button("🚀 텔레그램 발송 확인 (보안 모드)", use_container_width=True):
         try:
-            text = "다니엘 주인님! 하드코딩 우회로를 통해 강제 전송된 텔레그램 알림입니다! 이제 무조건 울립니다!"
-            url = f"https://api.telegram.org/bot{HARDCODED_BOT_TOKEN}/sendMessage"
-            res = requests.post(url, data={'chat_id': HARDCODED_CHAT_ID, 'text': text}, timeout=5)
+            bot_token = clean_token(st.secrets["api_keys"]["telegram_bot_token"])
+            chat_id = clean_token(st.secrets["api_keys"]["telegram_chat_id"])
+            text = "✅ 텔레그램 봇이 완벽하게 부활했습니다! 보안 시스템 정상 가동 중."
+            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            res = requests.post(url, data={'chat_id': chat_id, 'text': text}, timeout=5)
             
             if res.status_code == 200:
-                st.success("✅ [성공] 텔레그램 강제 발사 완료! 핸드폰 알림창을 확인하십시오.")
+                st.success("✅ [성공] 스마트폰 알림창을 확인하십시오.")
             else:
-                st.error(f"❌ [실패] 텔레그램 서버 거부: {res.text}")
-                st.warning("💡 조치사항: 만약 실패했다면, 스마트폰 텔레그램 봇 대화창에서 '/start'를 입력했는지 다시 한번 확인해주세요.")
+                st.error(f"❌ [실패] 코드 {res.status_code} - 새로운 토큰을 발급받으셔야 합니다!")
         except Exception as e:
             st.error(f"❌ 전송 오류: {e}")
 
