@@ -6,21 +6,26 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 import requests
 import json
+import re
 from streamlit_autorefresh import st_autorefresh
 
 # ==========================================
-# 1. 🚨 [매우 중요] 텔레그램 강제 고정 (수동 조작 영구 폐기)
-# ==========================================
-# 주인님! 아래 큰따옴표("") 안에 아까 새로 받으신 긴 토큰을 띄어쓰기 없이 붙여넣으십시오!
-BOT_TOKEN = "8824362537:AAEZLCz6MP4_KRSTcgzZhcGqUjPK9LphxEY"  # 예: "1234567890:ABCDefGhIjKl..."
-CHAT_ID = "8841018398"
-
-# ==========================================
-# 2. UI 및 엔진 설정
+# 1. 터미널 UI 및 자동 감시 설정 (1분 주기)
 # ==========================================
 st.set_page_config(page_title="Minerva Quant Terminal", page_icon="📈", layout="wide")
-st_autorefresh(interval=60000, limit=None, key="auto_scanner") # 1분마다 자동 감시
+st_autorefresh(interval=60000, limit=None, key="auto_scanner")
 
+# ==========================================
+# 2. 토큰 및 챗방 ID 설정 (안전한 자동 정화)
+# ==========================================
+def clean_token(token_str):
+    """보이지 않는 공백이나 줄바꿈을 완벽히 제거하여 401 에러를 방지합니다."""
+    if not token_str: return ""
+    return re.sub(r'\s+', '', str(token_str))
+
+# ==========================================
+# 3. API 및 DB 초기화
+# ==========================================
 @st.cache_resource
 def init_firebase():
     try:
@@ -41,37 +46,36 @@ except Exception:
     pass
 
 # ==========================================
-# 3. 텔레그램 초심층 리포트 자동 발송 모듈
+# 4. 텔레그램 자동 발송 모듈 (풀버전 전송)
 # ==========================================
 def send_telegram_alert(subject, analysis, news_list):
-    """텔레그램으로 메일내용, 분석, 뉴스 링크를 통째로 쏩니다."""
+    """대시보드를 켤 필요 없이 텔레그램으로 완벽한 브리핑을 쏩니다."""
     try:
-        if BOT_TOKEN == "여기에_새로_받은_토큰을_붙여넣으세요" or not BOT_TOKEN:
-            return # 토큰을 안 넣으셨으면 작동 중지
+        bot_token = clean_token(st.secrets["api_keys"]["telegram_bot_token"])
+        # 주인님의 챗방 ID는 고정이므로 하드코딩 처리하여 에러 차단
+        chat_id = "8841018398"
+        
+        if not bot_token: return
             
-        # 텔레그램 메시지를 HTML 형태로 예쁘게 구성합니다.
         text = f"🚨 <b>[Minerva 퀀트 시그널 포착]</b>\n\n"
         text += f"📌 <b>이슈:</b> {subject}\n"
         text += f"🌡️ <b>투심:</b> {analysis.get('sentiment', '중립')}\n\n"
         
-        text += f"🧠 <b>[핵심 요약 & 매크로 파급력]</b>\n{analysis.get('summary', '')}\n\n"
-        text += f"💼 <b>[월가 동향 & 실전 포지션]</b>\n{analysis.get('analyst_view', '')}\n\n"
+        text += f"🧠 <b>[매크로 파급력 & 인사이트]</b>\n{analysis.get('summary', '')}\n\n"
+        text += f"💼 <b>[월가 스마트머니 동향 & 포지션]</b>\n{analysis.get('analyst_view', '')}\n\n"
         
-        text += "📰 <b>[관련 핵심 뉴스 링크]</b>\n"
+        text += "📰 <b>[관련 핵심 뉴스 원문 링크]</b>\n"
         if news_list:
             for i, news in enumerate(news_list):
-                # 텔레그램에서 바로 클릭 가능한 파란색 링크 생성
                 text += f"{i+1}. <a href='{news['link']}'>{news['title']}</a>\n"
         else:
             text += "관련 뉴스를 검색할 수 없습니다.\n"
-            
-        text += "\n👉 <i>과거 데이터 및 딥 다이브는 대시보드를 참조하십시오.</i>"
 
-        url = f"https://api.telegram.org/bot{BOT_TOKEN.strip()}/sendMessage"
-        payload = {'chat_id': CHAT_ID.strip(), 'text': text, 'parse_mode': 'HTML'}
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML'}
         requests.post(url, data=payload, timeout=5)
     except Exception as e:
-        print(f"텔레그램 발송 실패: {e}")
+        pass
 
 def get_gmail_service():
     try:
@@ -83,23 +87,24 @@ def get_gmail_service():
         return None
 
 # ==========================================
-# 4. AI 메일 심층 분석 모듈
+# 5. AI 메일 심층 분석 모듈 (거품 제거형 퀀트 두뇌)
 # ==========================================
 def analyze_email_content(text_content):
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
         prompt = f"""
         당신은 월스트리트 수석 퀀트 애널리스트 '모네타'입니다. 
-        아래 이메일 데이터를 분석하여 철저한 퀀트 리포트를 작성하십시오. 단어 하나만 있어도 거시경제적 배경을 추론해 방대하게 작성해야 합니다.
+        아래 이메일 데이터를 분석하여 철저한 퀀트 리포트를 작성하십시오. 
+        짧은 단어만 있어도 글로벌 거시경제(금리, 환율, 유동성)와의 인과관계를 추론해 방대하게 작성해야 합니다.
 
         [수신 이메일 데이터]
         "{text_content}"
 
-        [규칙] JSON 형식으로만 답하세요. (마크다운 금지)
+        [규칙] JSON 형식으로만 답하세요. (대괄호나 마크다운 기호 절대 금지)
         {{
-            "summary": "메일 내용의 의미와 글로벌 유동성, 금리, 환율 등에 미칠 파급력을 상세히 분석 (최소 200자)",
+            "summary": "메일 내용이 글로벌 유동성과 매크로 시장에 미칠 파급력을 상세히 분석 (최소 200자 이상)",
             "keyword": "구글 뉴스 검색을 위한 구체적인 경제 키워드 1개",
-            "analyst_view": "월가 스마트머니 동향 및 실전 롱/숏 포지션 전략 제안 (최소 200자)",
+            "analyst_view": "월가 스마트머니 동향 및 실전 롱/숏 포지션 전략 제안 (최소 200자 이상)",
             "sentiment": "강세, 약세, 관망, 중립 중 택 1"
         }}
         """
@@ -108,7 +113,7 @@ def analyze_email_content(text_content):
         return json.loads(raw_text)
     except Exception:
         return {
-            "summary": "AI 분석 중 일시적 지연이 발생했습니다. 핵심 키워드를 바탕으로 시장 변동성을 주시하십시오.",
+            "summary": "AI 분석 중 일시적 지연이 발생했습니다. 변동성이 확대되는 구간이므로 국채 금리 스프레드를 주시하십시오.",
             "keyword": "글로벌 매크로",
             "analyst_view": "리스크 관리가 필요한 구간입니다. 델타 헷징 및 현금 비중 확대를 권고합니다.",
             "sentiment": "관망"
@@ -118,7 +123,7 @@ def fetch_news_with_links(keyword):
     try:
         api_key = st.secrets["api_keys"]["google_search"]
         cx = st.secrets["api_keys"]["search_engine_id"]
-        url = f"https://www.googleapis.com/customsearch/v1?key={api_key}&cx={cx}&q={keyword} 주식 경제&num=3"
+        url = f"https://www.googleapis.com/customsearch/v1?key={api_key}&cx={cx}&q={keyword} 경제 OR 증시&num=3"
         res = requests.get(url, timeout=5).json()
         
         news_data = []
@@ -131,7 +136,7 @@ def fetch_news_with_links(keyword):
         return []
 
 # ==========================================
-# 5. 코어 엔진 (자동 감시 및 처리)
+# 6. 코어 엔진 (수동 버튼 없이 100% 자동 실행)
 # ==========================================
 def scan_and_process():
     service = get_gmail_service()
@@ -155,16 +160,14 @@ def scan_and_process():
                 subject = next((h['value'] for h in headers if h['name'] == 'Subject'), '새로운 시그널')
                 snippet = msg_data.get('snippet', '')
 
-                # 1. 메일 제목과 내용 병합
+                # 1. 메일 내용 병합 및 심층 분석
                 combined_text = subject + " " + snippet
-                
-                # 2. AI 심층 분석
                 analysis = analyze_email_content(combined_text)
                 
-                # 3. 관련 뉴스 찾기 (링크 포함)
+                # 2. 관련 뉴스 찾기 (클릭 가능한 링크 포함)
                 news_links = fetch_news_with_links(analysis.get('keyword', '경제'))
 
-                # 4. DB 저장
+                # 3. DB 저장
                 doc_ref.set({
                     'id': msg_id,
                     'subject': subject,
@@ -175,10 +178,10 @@ def scan_and_process():
                     'timestamp': firestore.SERVER_TIMESTAMP
                 })
 
-                # 5. 메일 읽음 처리
+                # 4. 메일 읽음 처리
                 service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
                 
-                # 6. 🚨 대망의 텔레그램 자동 발송 (모든 내용 통째로!)
+                # 5. 🚨 대망의 텔레그램 자동 발송 (모든 리포트를 통째로 전송!)
                 send_telegram_alert(subject, analysis, news_links)
                 
                 processed_count += 1
@@ -188,7 +191,7 @@ def scan_and_process():
     return processed_count
 
 # ==========================================
-# 6. 대시보드 UI
+# 7. 대시보드 UI (깔끔한 뷰어 역할)
 # ==========================================
 def main():
     st.markdown("""
@@ -198,6 +201,7 @@ def main():
         </div>
     """, unsafe_allow_html=True)
 
+    # 대시보드를 켜두기만 하면 알아서 스캐닝하고 텔레그램으로 보냅니다.
     with st.spinner('글로벌 매크로 데이터를 자동 스캐닝 중입니다...'):
         new_count = scan_and_process()
         if new_count > 0:
@@ -210,7 +214,7 @@ def main():
     docs = list(db.collection('daniel_reports').order_by('timestamp', direction=firestore.Query.DESCENDING).stream())
 
     if not docs:
-        st.info("💡 대기 중인 시그널이 없습니다. 메일을 수신하면 즉시 분석 후 텔레그램으로 전송합니다.")
+        st.info("💡 대기 중인 시그널이 없습니다. 메일을 수신하면 즉시 딥러닝 분석 후 텔레그램으로 전송합니다.")
     else:
         for doc in docs:
             data = doc.to_dict()
@@ -239,7 +243,7 @@ def main():
                     news_items = data.get('news', [])
                     if news_items and isinstance(news_items[0], dict):
                         for n in news_items:
-                            # 클릭 가능한 진짜 하이퍼링크 생성
+                            # 하이퍼링크가 대시보드에서도 완벽하게 클릭되도록 설정
                             st.markdown(f"👉 <a href='{n['link']}' target='_blank' style='text-decoration:none;'>{n['title']}</a>", unsafe_allow_html=True)
                     else:
                         st.caption("관련 뉴스를 찾지 못했습니다.")
